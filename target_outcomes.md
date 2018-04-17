@@ -13,8 +13,7 @@ P = 0.008; experiment 4, 12-month-olds (n = 24),Mconsistent= 4.2 s,Minconsistent
 
 ## Experiments 5 and 6
 ### Looking time (paradigm validation)
-As expected at these ages, infants looked longer at an outcome inconsistent with the identity of the (known) object in the cup   
-[experiment 5, 19-month-olds (n = 24), Mconsistent = 3.8 s, Minconsistent = 8.3 s, F(1,23) = 26.1, P = 0.0001; experiment 6, 12-month-olds (n =24), Mconsistent=4.9s, Minconsistent=6.2 s, F(1,23) = 4.9, P = 0.037; repeated measures ANOVAs].
+As expected at these ages, infants looked longer at an outcome inconsistent with the identity of the (known) object in the cup [experiment 5, 19-month-olds (n = 24), Mconsistent = 3.8 s, Minconsistent = 8.3 s, F(1,23) = 26.1, P = 0.0001; experiment 6, 12-month-olds (n =24), Mconsistent=4.9s, Minconsistent=6.2 s, F(1,23) = 4.9, P = 0.037; repeated measures ANOVAs].
 
 ### Eye-tracking analyses
 By the end of this phase, infants also displaced their eyes toward the cup more markedly (Fig. 3, B and C, and supplementary
