@@ -19,35 +19,120 @@ str(data1)
 
 data2 <- read_tsv("data/InfantsData/ByTrial_LookingTime/E2-byTrial.txt")
 str(data2)
+
+data3 <- read_tsv("data/InfantsData/ByTrial_LookingTime/E3-byTrial.txt")
+str(data3)
+
+data4 <- read_tsv("data/InfantsData/ByTrial_LookingTime/E4-byTrial.txt")
+str(data4)
 ```
-
-```{r getting data in}
-d1 <- data1 %>%
-  group_by(Outcome,Participant) %>%
-  summarise(mean = mean(LookingTime))%>%
-  group_by(Outcome) %>%
-  summarise(mean = mean(mean))
-
-data2 %>%
-  group_by(Outcome,Participant) %>%
-  summarise(mean = mean(LookingTime))%>%
-  group_by(Outcome) %>%
-  summarise(mean = mean(mean))
-
-```
-
-```{r anovas}
+Visualizing the data in a different way thna barplots.
+```{r plot 19mo}
 d1 <- data1 %>%
   group_by(Outcome,Participant) %>%
   summarise(LookingTime = mean(LookingTime))
 
-aov_ez("Participant","LookingTime",d1,within="Outcome")
+d1.p <- d1 %>%
+  multi_boot_standard(col = "LookingTime")
 
+ggplot() +
+  geom_jitter(data = d1, aes(x = Outcome, y = LookingTime, col = Outcome, alpha = .2), width = .1,height = .0)+
+  geom_pointrange(data = d1.p,aes(x = Outcome, y = mean, col = Outcome,ymin = ci_lower, ymax = ci_upper), 
+                  position = position_dodge(width = .5), size = 1) + 
+  guides(alpha = F)+
+  ggtitle("19mo")+
+  theme_few() + 
+  scale_colour_solarized()
+
+```
+
+```{r plot 12mo}
 d2 <- data2 %>%
   group_by(Outcome,Participant) %>%
   summarise(LookingTime = mean(LookingTime))
 
-aov_ez("Participant","LookingTime",d2,within="Outcome")
+d2.p <- d2 %>%
+  multi_boot_standard(col = "LookingTime")
 
+ggplot() +
+  geom_jitter(data = d2, aes(x = Outcome, y = LookingTime, col = Outcome, alpha = .2), width = .1,height = .0)+
+  geom_pointrange(data = d2.p,aes(x = Outcome, y = mean, col = Outcome,ymin = ci_lower, ymax = ci_upper), 
+                  position = position_dodge(width = .5), size = 1) + 
+  guides(alpha = F)+
+  ggtitle("12mo")+
+  theme_few() + 
+  scale_colour_solarized()
+```
+
+```{r}
+d3 <- data3 %>%
+  group_by(Outcome,Participant) %>%
+  summarise(LookingTime = mean(LookingTime))
+
+d3.p <- d3 %>%
+  multi_boot_standard(col = "LookingTime")
+
+ggplot() +
+  geom_jitter(data = d3, aes(x = Outcome, y = LookingTime, col = Outcome, alpha = .2), width = .1,height = .0)+
+  geom_pointrange(data = d3.p,aes(x = Outcome, y = mean, col = Outcome,ymin = ci_lower, ymax = ci_upper), 
+                  position = position_dodge(width = .5), size = 1) + 
+  guides(alpha = F)+
+  ggtitle("19mo ex 3")+
+  theme_few() + 
+  scale_colour_solarized()
+```
+
+
+
+```{r}
+d4 <- data4 %>%
+  group_by(Outcome,Participant) %>%
+  summarise(LookingTime = mean(LookingTime))
+
+d4.p <- d4 %>%
+  multi_boot_standard(col = "LookingTime")
+
+ggplot() +
+  geom_jitter(data = d4, aes(x = Outcome, y = LookingTime, col = Outcome, alpha = .2), width = .1,height = .0)+
+  geom_pointrange(data = d4.p,aes(x = Outcome, y = mean, col = Outcome,ymin = ci_lower, ymax = ci_upper), 
+                  position = position_dodge(width = .5), size = 1) + 
+  guides(alpha = F)+
+  ggtitle("12mo ex 4")+
+  theme_few() + 
+  scale_colour_solarized()
+```
+
+Repeating analysis with mixed-effects models and log looking time. 
+```{r models}
+#ex1
+m1 <- lmer(LookingTime ~ Outcome + (Outcome|Participant) + (1|Couple), data = data1)
+summary(m1)
+
+lm1 <- lmer(log(LookingTime) ~ Outcome + (Outcome|Participant) + (1|Couple), data = data1)
+summary(lm1)
+
+
+#ex2
+m2 <- lmer(LookingTime ~ Outcome + (Outcome|Participant) + (1|Couple), data = data2)
+summary(m2)
+
+lm2 <- lmer(log(LookingTime) ~ Outcome + (Outcome|Participant) + (1|Couple), data = data2)
+summary(lm2)
+
+
+#ex3
+m3 <- lmer(LookingTime ~ Outcome + (Outcome|Participant) + (1|Couple), data = data3)
+summary(m3)
+
+lm3 <- lmer(log(LookingTime) ~ Outcome + (Outcome|Participant) + (1|Couple), data = data3)
+summary(lm3)
+
+
+#ex 4
+m4 <- lmer(LookingTime ~ Outcome + (Outcome|Participant) + (1|Couple), data = data4)
+summary(m4)
+
+lm4 <- lmer(log(LookingTime) ~ Outcome + (Outcome|Participant) + (1|Couple), data = data4)
+summary(lm4)
 ```
 
