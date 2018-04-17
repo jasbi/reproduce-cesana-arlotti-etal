@@ -1,0 +1,38 @@
+---
+title: "experiment1"
+author: ""
+date: "17 4 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+
+
+```{r data processing}
+
+data1 <- read_tsv("data/InfantsData/ByTrial_LookingTime/E1-byTrial.txt")
+str(data1)
+
+data2 <- read_tsv("data/InfantsData/ByTrial_LookingTime/E2-byTrial.txt")
+str(data2)
+```
+
+```{r}
+data1 %>%
+  group_by(Outcome,Participant) %>%
+  summarise(mean = mean(LookingTime))%>%
+  group_by(Outcome) %>%
+  summarise(mean = mean(mean))
+
+data2 %>%
+  group_by(Outcome,Participant) %>%
+  summarise(mean = mean(LookingTime))%>%
+  group_by(Outcome) %>%
+  summarise(mean = mean(mean))
+
+```
+
