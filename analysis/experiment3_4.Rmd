@@ -1,0 +1,45 @@
+---
+title: "experiment3 & 4"
+author: ""
+date: "17 4 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(CODreports) # custom report functions
+library(afex)
+```
+
+
+```{r data processing}
+
+data3 <- read_tsv("../data/InfantsData/ByTrial_LookingTime/E3-byTrial.txt")
+str(data1)
+
+data4 <- read_tsv("../data/InfantsData/ByTrial_LookingTime/E4-byTrial.txt")
+str(data2)
+```
+
+```{r}
+exp3 <- data3 %>%
+  group_by(Outcome,Participant) %>%
+  summarise(mean = mean(LookingTime))%>%
+  group_by(Outcome) %>%
+  summarise(mean = mean(mean))
+
+exp4 <- data4 %>%
+  group_by(Outcome,Participant) %>%
+  summarise(mean = mean(LookingTime))%>%
+  group_by(Outcome) %>%
+  summarise(mean = mean(mean))
+
+## Means for Experiment 3
+compareValues(reportedValue = 6.2, obtainedValue = exp3$mean[1], isP = F)
+compareValues(reportedValue = 4.9, obtainedValue = exp3$mean[2], isP = F)
+
+## Means for Experiment 4
+compareValues(reportedValue = 6.1, obtainedValue = exp4$mean[1], isP = F)
+compareValues(reportedValue = 4.2, obtainedValue = exp4$mean[2], isP = F)
+```
