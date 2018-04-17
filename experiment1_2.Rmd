@@ -8,8 +8,8 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(afex)
 ```
-
 
 
 ```{r data processing}
@@ -21,8 +21,8 @@ data2 <- read_tsv("data/InfantsData/ByTrial_LookingTime/E2-byTrial.txt")
 str(data2)
 ```
 
-```{r}
-data1 %>%
+```{r getting data in}
+d1 <- data1 %>%
   group_by(Outcome,Participant) %>%
   summarise(mean = mean(LookingTime))%>%
   group_by(Outcome) %>%
@@ -33,6 +33,21 @@ data2 %>%
   summarise(mean = mean(LookingTime))%>%
   group_by(Outcome) %>%
   summarise(mean = mean(mean))
+
+```
+
+```{r anovas}
+d1 <- data1 %>%
+  group_by(Outcome,Participant) %>%
+  summarise(LookingTime = mean(LookingTime))
+
+aov_ez("Participant","LookingTime",d1,within="Outcome")
+
+d2 <- data2 %>%
+  group_by(Outcome,Participant) %>%
+  summarise(LookingTime = mean(LookingTime))
+
+aov_ez("Participant","LookingTime",d2,within="Outcome")
 
 ```
 
