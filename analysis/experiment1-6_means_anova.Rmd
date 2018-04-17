@@ -24,6 +24,12 @@ str(data1)
 
 data4 <- read_tsv("../data/InfantsData/ByTrial_LookingTime/E4-byTrial.txt")
 str(data2)
+
+data5 <- read_tsv("../data/InfantsData/ByTrial_LookingTime/E5-byTrial.txt")
+str(data2)
+
+data6 <- read_tsv("../data/InfantsData/ByTrial_LookingTime/E6-byTrial.txt")
+str(data2)
 ```
 ### Summarize for data analysis
 ```{r}
@@ -51,6 +57,18 @@ exp4 <- data4 %>%
   group_by(Outcome) %>%
   summarise(mean = mean(mean))
 
+exp5 <- data5 %>%
+  group_by(Outcome,Participant) %>%
+  summarise(mean = mean(LookingTime))%>%
+  group_by(Outcome) %>%
+  summarise(mean = mean(mean))
+
+exp6 <- data6 %>%
+  group_by(Outcome,Participant) %>%
+  summarise(mean = mean(LookingTime))%>%
+  group_by(Outcome) %>%
+  summarise(mean = mean(mean))
+
 ```
 # Target outcomes: Means and ANOVAs for Experiments 1-4
 ## Experiment 1 and 2
@@ -63,6 +81,10 @@ the cup through logical inference and were surprised when this conclusion was vi
 ### Looking time
 Both 19 and 12-month-olds looked longer at the inconsistent outcome (Fig. 2C), suggesting that they reacted to the logical gist of
 a scene [experiment 3, 19-month-olds (n = 24), Mconsistent = 4.9 s, Minconsistent = 6.2 s, F(1,23) = 8.5, P = 0.008; experiment 4, 12-month-olds (n = 24),Mconsistent= 4.2 s,Minconsistent = 6.1 s, F(1,23) = 11, P = 0.003; repeated measures ANOVAs].
+
+## Experiments 5 and 6
+### Looking time (paradigm validation)
+As expected at these ages, infants looked longer at an outcome inconsistent with the identity of the (known) object in the cup [experiment 5, 19-month-olds (n = 24), Mconsistent = 3.8 s, Minconsistent = 8.3 s, F(1,23) = 26.1, P = 0.0001; experiment 6, 12-month-olds (n =24), Mconsistent=4.9s, Minconsistent=6.2 s, F(1,23) = 4.9, P = 0.037; repeated measures ANOVAs].
 
 ### Check means reported for experiments 1-4
 ```{r}
@@ -82,6 +104,14 @@ compareValues(reportedValue = 4.9, obtainedValue = exp3$mean[2], isP = F)
 ## Means for Experiment 4
 compareValues(reportedValue = 6.1, obtainedValue = exp4$mean[1], isP = F)
 compareValues(reportedValue = 4.2, obtainedValue = exp4$mean[2], isP = F)
+
+## Means for Experiment 5
+compareValues(reportedValue = 8.3, obtainedValue = exp5$mean[1], isP = F)
+compareValues(reportedValue = 3.8, obtainedValue = exp5$mean[2], isP = F)
+
+## Means for Experiment 6
+compareValues(reportedValue = 6.2, obtainedValue = exp6$mean[1], isP = F)
+compareValues(reportedValue = 4.9, obtainedValue = exp6$mean[2], isP = F)
 ```
 ### Check experiment 1 ANOVA values
 ```{r}
@@ -147,5 +177,42 @@ compareValues(reportedValue = 11, obtainedValue = e4_anova$anova_table$F, isP = 
 compareValues(reportedValue = .003, obtainedValue = e4_anova$anova_table$`Pr(>F)`, isP = T)
 
 ```
+
+### Check experiment 5 ANOVA values
+```{r}
+## wrangle data
+d5 <- data5 %>%
+  group_by(Outcome,Participant) %>%
+  summarise(LookingTime = mean(LookingTime))
+
+## compute anova
+e5_anova = aov_ez("Participant","LookingTime",d5,within="Outcome")
+
+## compare values
+compareValues(reportedValue = 26.1, obtainedValue = e5_anova$anova_table$F, isP = F)
+compareValues(reportedValue = .0001, obtainedValue = e5_anova$anova_table$`Pr(>F)`, isP = T)
+
+```
+
+As expected at these ages, infants looked longer at an outcome inconsistent with the identity of the (known) object in the cup [experiment 5, 19-month-olds (n = 24), Mconsistent = 3.8 s, Minconsistent = 8.3 s, F(1,23) = 26.1, P = 0.0001; experiment 6, 12-month-olds (n =24), Mconsistent=4.9s, Minconsistent=6.2 s, F(1,23) = 4.9, P = 0.037; repeated measures ANOVAs].
+
+
+
+### Check experiment 6 ANOVA values
+```{r}
+## wrangle data
+d6 <- data6 %>%
+  group_by(Outcome,Participant) %>%
+  summarise(LookingTime = mean(LookingTime))
+
+## compute anova
+e6_anova = aov_ez("Participant","LookingTime",d6,within="Outcome")
+
+## compare values
+compareValues(reportedValue = 4.9, obtainedValue = e6_anova$anova_table$F, isP = F)
+compareValues(reportedValue = .037, obtainedValue = e6_anova$anova_table$`Pr(>F)`, isP = T)
+
+```
+
 
 
