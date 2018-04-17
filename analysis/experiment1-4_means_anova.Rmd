@@ -12,7 +12,6 @@ library(CODreports) # custom report functions
 library(afex)
 ```
 
-
 ```{r data processing}
 data1 <- read_tsv("../data/InfantsData/ByTrial_LookingTime/E1-byTrial.txt")
 str(data1)
@@ -113,6 +112,7 @@ e2_anova = aov_ez("Participant","LookingTime",d2,within="Outcome")
 ## check values
 compareValues(reportedValue = 5.19, obtainedValue = e2_anova$anova_table$F, isP = F)
 compareValues(reportedValue = .032, obtainedValue = e2_anova$anova_table$`Pr(>F)`, isP = T)
+
 
 ```
 
