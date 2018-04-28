@@ -1,0 +1,177 @@
+---
+title: "Cesana-Arlotti Permutation Analysis"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+knitr::opts_chunk$set(warning=F, cache=T, message=F)
+```
+
+```{r}
+library(magrittr)
+library(eyetrackingR)
+library(tidyverse)
+theme_set(ggthemes::theme_few())
+```
+
+## Read the timecourse data
+
+% In each file, data were stored with the following columns:
+
+	Participant % Participants' ID number.
+	Trial % The trial corresponding to the data point.	
+	Bin	% Indicates the frame in which the data was collected by the Eyectracker (60 Hz)
+	MovieID % Unique Scenes ID 
+	Experiment %  indicates the age group and the Inference vs No_Inference condition
+	X	% The average gaze position on the X-axis in the corresponding bin (see main text and SOM).
+	PD %  The average change in pupil diameter from the baseline in the corresponding Bin (see main text and SOM).
+
+
+```{r}
+files <- list.files("../data/InfantsData/ByBin")
+
+# index is a hacky way to separate the ground truth coding files from the timing df
+d <- files %>% map_dfr(~ read_tsv(file.path("../data/InfantsData/ByBin/", .)))
+```
+
+```{r}
+glimpse(d)
+```
+
+Some data checks.
+
+```{r}
+d$Experiment %>% unique()
+```
+
+Separate age group and trial type information, which is currently store in the Experiment variable. 
+
+```{r}
+d %<>% separate(col = Experiment, into = c("age_group", "trial_type"))
+
+unique(d$age_group) # two age groups
+unique(d$trial_type) # two trial types
+```
+
+Gather pupil dilation and mean_x into one `measurement` variable.
+
+```{r}
+d %<>% gather(key = measurement_type, value = value, X:PD)
+```
+
+Convert Bins (60 Hz) to time (seconds)
+
+```{r}
+one_hz_in_ms <- 16.67
+d %<>% mutate(time_ms = Bin * one_hz_in_ms,
+              time_sec = time_ms / 1000) 
+```
+
+Append experiment information to participant_id to make sure we track who was in what experiment.
+
+```{r}
+d %<>% mutate(Participant = str_c(Participant, trial_type, sep = "_"))
+```
+
+Check how many participants we have in each experiment and age group. 
+
+```{r}
+d %>% 
+  distinct(Participant, age_group, trial_type) %>% 
+  count(age_group, trial_type) 
+```
+
+This looks reasonable. Now we should be able to reproduce the timecourse plots and cluster-based permutation analyses.
+
+## Goal of analysis
+
+> However, the main aim of our research is to explore behavioral correlates of inference drawing online. To this purpose, eye tracking data during the Potential Deduction phase, as well as measures that relate infants' behavior during this phase with their response to outcomes inconsistent with a potential deduction.
+
+> Below, we analyze pupil change, eye position onscreen and proportion of trials in which infants' eyes shifted from the visible object onstage to the cup in perceptually identical scenes that either invited or did not require a logical deduction (respectively, Inference condition, Experiment 3 and 4 and No-inference condition, Experiment 5 and 6)
+
+### Measures:
+
+* `pupil change`: pupil dilation has been found to be a marker for cognitive effort, memory load and attentional focus
+* `proportion of trials shifting to cup` (inference vs. no-inference):  Shifts from the visible object to the cup are an indication that infants deploy a particular a scanning strategy during inference making
+* `eye position onscreen` (Mean x gaze position onscreen): the variation of eye position onscreen as if it eyes were smoothly transitioning across different elements of the screen
+
+## Participants & Data filters
+
+Infants' eye gaze data from Experiments 3-6 (N = 96) were analyzed. Trials in which less than 70% of the gaze samples were collected were excluded from analysis. With these criteria 4 participants were excluded (1 in Experiment 5 and 3 in Experiment 6) because no valid trial was retained.
+
+## Target outcomes
+
+1. higher pupil dilation in the inference condition 
+
+2. a reorientation of focal attention toward the cup, as signaled by the temporal analysis of mean x and by the analysis of the proportion of trials with visible-object-to-cup shifts
+  - proportion of trials with visible-object-to-cup shifts
+  - temporal analysis of mean x gaze position
+
+## Target stats
+
+1. [KM: Where are the stats for the cluster-based analyses of pupil dilation and mean x?]
+
+2. Proportion of tirals with with visible-object-to-cup shifts: We ran a two-way ANOVA with proportion of trials as the dependent variable, Age Group (12/19) and Condition (Inference/No-Inference) as an independent variables. As reported in the main text, the analysis revealed an effect of Condition, no effect of Age and no interaction. Infants shifted from the object to the cup in more trials when the Potential Deduction phase required an inference than when it did not (MInference = 71%, MNo_Inference = 50%; F(1, 88) = 10.4, P = 0.002; fig. S2). 
+
+## Timecourse plots
+
+![Original Timecourse Plots](../figures/orig_timecourses.png)
+
+### Mean x
+
+Aggregate over participants and time bins
+
+```{r}
+ss <- d %>% 
+  group_by(Participant, trial_type, age_group, time_sec, measurement_type) %>% 
+  summarise(ss_m = mean(value, na.rm = T))
+
+ms <- ss %>% 
+  group_by(trial_type, age_group, time_sec, measurement_type) %>% 
+  summarise(n = n(),
+            m = mean(ss_m), stdev = sd(ss_m)) %>%
+  mutate(se = stdev / sqrt(n))
+```
+
+Make the key plot 
+
+TODO: add adult data from E7
+
+```{r}
+ms %>% 
+  ggplot(aes(x = time_sec, y = m, color = trial_type)) +
+  geom_line() +
+  geom_linerange(aes(ymin = m - se, ymax = m + se), alpha = 0.7) +
+  facet_grid(measurement_type~age_group, scales = "free_y") +
+  theme(legend.position = "top")
+```
+
+There are some differences between these plots and Figure 3 in the paper. First, the large baseline differences between inference and no-inferences in the 12-month-olds X-corrdinate data.
+
+## Analysis
+
+> We analyzed the temporal dynamics of the mean x gaze coordinates (hereafter mean x) and the pupil changes in the same temporal region.
+
+### Calculating pupil dilation
+
+Pupil dilation were calculated as follows. 
+
+  * First, we identified the first frame at which the mean x gaze did not differ statistically between the two conditions (Inference and No-Inference, unpaired t-test). The rationale for this choice is that starting from that frame we could be sure that the eyes were directed at the same area of the screen, and hence that the pupil was exposed to identical light sources in both conditions. Thus, any potential luminosity difference between conditions could not affect the dilation of the pupil at the relevant moment of the analysis. This choice was facilitated by the fact that the Potential Deduction phase started when an object exited the occluder. The sheer movement of the object onscreen led most participants in most trials to direct their gazes towards the exiting object, marking a quite clear moment in which their x gaze position would overlap, on average. 
+  
+* Then, for each trial and for each participant, a baseline pupil diameter was computed by averaging the data samples in the first 300 ms after that frame. Such interval should be sufficient for the physiological response of the pupil to adapt to the lighting condition of each movie at the moment of interest. 
+  
+* Second, for each successive data sample during the Potential Deduction phase, we computed the difference between raw pupil diameter and the baseline pupil diameter, trial by trial and participant by participant. 
+  
+Thus, pupil dilation changes reflected actual differences at each individual trial for each individual infant.
+
+
+### Permutation analysis
+ 
+Finally, for the pupil dilation changes as well as the mean x, we ran a cluster mass test coupled with a randomization procedure (24, 25). The details of our procedure were as follows. 
+
+  * We computed unpaired t-tests at each time bin for the mean x gaze coordinates and the pupil dilation changes, separately for 12- and 19- month-olds. 
+  * For pupil dilation changes, the tests were one-tailed because, based on our hypothesis and the literature, we expect an inference to have a cognitive cost resulting in higher pupil dilation, as for other cognitive activities implying higher effort. 
+  * For mean x, the tests were two-tailed we have no hypothesis as to where infants look in the particular moments of the Potential Deduction phase we analyzed. 
+  * Temporal cluster statistics were defined as the sum of the t values thresholded at p=0.05 on consecutive time bins. To evaluate the significance of the test, we recomputed the same analysis on 1000 sets of random permutations. The permutations were computed by randomly assigning the participants to the condition labels (Inference/No Inference), taking care to maintain the N of the two conditions identical to the N available for the original data.
