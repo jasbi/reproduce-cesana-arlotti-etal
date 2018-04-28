@@ -30,10 +30,9 @@ theme_set(ggthemes::theme_few())
 
 
 ```{r}
-files <- list.files("../data/InfantsData/ByBin")
-
-# index is a hacky way to separate the ground truth coding files from the timing df
-d <- files %>% map_dfr(~ read_tsv(file.path("../data/InfantsData/ByBin/", .)))
+data_path <- "../data/InfantsData/ByBin"
+files <- list.files(data_path)
+d <- files %>% map_dfr(~ read_tsv(file.path(data_path, .)))
 ```
 
 ```{r}
