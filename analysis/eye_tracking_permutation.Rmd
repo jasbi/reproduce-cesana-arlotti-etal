@@ -11,7 +11,6 @@ knitr::opts_chunk$set(warning=F, cache=T, message=F)
 
 ```{r}
 library(magrittr)
-library(eyetrackingR)
 library(tidyverse)
 theme_set(ggthemes::theme_few())
 ```
@@ -118,36 +117,36 @@ Infants' eye gaze data from Experiments 3-6 (N = 96) were analyzed. Trials in wh
 
 ![Original Timecourse Plots](../figures/orig_timecourses.png)
 
-### Mean x
+### Mean x looking behavior
 
 Aggregate over participants and time bins
 
 ```{r}
 ss <- d %>% 
-  group_by(Participant, trial_type, age_group, time_sec, measurement_type) %>% 
+  group_by(Participant, trial_type, age_group, time_sec, measurement_type, Bin) %>% 
   summarise(ss_m = mean(value, na.rm = T))
 
 ms <- ss %>% 
-  group_by(trial_type, age_group, time_sec, measurement_type) %>% 
+  group_by(trial_type, age_group, time_sec, measurement_type, Bin) %>% 
   summarise(n = n(),
             m = mean(ss_m), stdev = sd(ss_m)) %>%
-  mutate(se = stdev / sqrt(n))
+  mutate(se = stdev / sqrt(n),
+         ci = 2 * se)
 ```
 
-Make the key plot 
-
-TODO: add adult data from E7
+Make the key timecourse plot. TODO: add adult data from E7
 
 ```{r}
 ms %>% 
   ggplot(aes(x = time_sec, y = m, color = trial_type)) +
   geom_line() +
   geom_linerange(aes(ymin = m - se, ymax = m + se), alpha = 0.7) +
+  #geom_linerange(aes(ymin = m - ci, ymax = m + ci), alpha = 0.7) +
   facet_grid(measurement_type~age_group, scales = "free_y") +
   theme(legend.position = "top")
 ```
 
-There are some differences between these plots and Figure 3 in the paper. First, the large baseline differences between inference and no-inferences in the 12-month-olds X-corrdinate data.
+There are some differences between these plots and Figure 3 in the paper. First, the large baseline differences between inference and no-inferences in the 12-month-olds X-corrdinate data. Also, an overall point that these are not super convincing curves, and I'm not sure why the 19-month-olds' X-coordinate looking patterns look so different from the 12-month-olds.
 
 ## Analysis
 
@@ -159,12 +158,13 @@ Pupil dilation were calculated as follows.
 
   * First, we identified the first frame at which the mean x gaze did not differ statistically between the two conditions (Inference and No-Inference, unpaired t-test). The rationale for this choice is that starting from that frame we could be sure that the eyes were directed at the same area of the screen, and hence that the pupil was exposed to identical light sources in both conditions. Thus, any potential luminosity difference between conditions could not affect the dilation of the pupil at the relevant moment of the analysis. This choice was facilitated by the fact that the Potential Deduction phase started when an object exited the occluder. The sheer movement of the object onscreen led most participants in most trials to direct their gazes towards the exiting object, marking a quite clear moment in which their x gaze position would overlap, on average. 
   
-* Then, for each trial and for each participant, a baseline pupil diameter was computed by averaging the data samples in the first 300 ms after that frame. Such interval should be sufficient for the physiological response of the pupil to adapt to the lighting condition of each movie at the moment of interest. 
+  * Then, for each trial and for each participant, a baseline pupil diameter was computed by averaging the data samples in the first 300 ms after that frame. Such interval should be sufficient for the physiological response of the pupil to adapt to the lighting condition of each movie at the moment of interest. 
   
-* Second, for each successive data sample during the Potential Deduction phase, we computed the difference between raw pupil diameter and the baseline pupil diameter, trial by trial and participant by participant. 
+  * Second, for each successive data sample during the Potential Deduction phase, we computed the difference between raw pupil diameter and the baseline pupil diameter, trial by trial and participant by participant. 
   
 Thus, pupil dilation changes reflected actual differences at each individual trial for each individual infant.
 
+KM: they provided the computed pupil dilation, so we didn't actually compute this.
 
 ### Permutation analysis
  
@@ -174,3 +174,283 @@ Finally, for the pupil dilation changes as well as the mean x, we ran a cluster 
   * For pupil dilation changes, the tests were one-tailed because, based on our hypothesis and the literature, we expect an inference to have a cognitive cost resulting in higher pupil dilation, as for other cognitive activities implying higher effort. 
   * For mean x, the tests were two-tailed we have no hypothesis as to where infants look in the particular moments of the Potential Deduction phase we analyzed. 
   * Temporal cluster statistics were defined as the sum of the t values thresholded at p=0.05 on consecutive time bins. To evaluate the significance of the test, we recomputed the same analysis on 1000 sets of random permutations. The permutations were computed by randomly assigning the participants to the condition labels (Inference/No Inference), taking care to maintain the N of the two conditions identical to the N available for the original data.
+  
+```{r}
+d_filt <- ss %>% filter(age_group == 12, measurement_type == "PD") # just start with one age group and one DV to build analysis
+num_sub <- d_filt %>% 
+  ungroup() %>% 
+  select(Participant, trial_type) %>% 
+  unique() %>% 
+  count(trial_type) %>% 
+  pull(n) %>% max()
+```
+
+```{r}
+threshold_t <- qt(p = 1 - .05/2, df = num_sub - 1) # pick threshold t based on alpha = .05 two tailed
+threshold_t_one_tailed <- qt(p = 1 - .05, df = num_sub-1) # pick threshold t based on alpha = .05 one tailed
+```
+
+## Rolling my own permutation analysis
+
+First, we need to get the summed t-statitistic that provides the strongest evidence of a difference between the two trial types. We do this by looking for clusters of significant differences in the timecourse, with clusters defined by adjacency in time.
+
+Concretely, we run a statistical test on each time-bin of the data (here an unpaired t-test). This can be any valid and appropriate statistic test that quantifies the probability of the effect: 
+
+```{r}
+# wrapper function that we can over a list of data frames
+run_t_test <- function(df, paired = FALSE, alternative = "two.sided") {
+  t.test(ss_m ~ trial_type, 
+         alternative = alternative,
+         paired = paired,
+         data = df)
+}
+
+# nest the data by time bin 
+by_bin <- d_filt %>% 
+  group_by(Bin) %>% 
+  nest()
+```
+
+KM note: I ran into a bug when trying to map the t-test to each time bin. There are two extra time bins in the No-Inference condition. So we need to find the max time bin that both conditions have and use that as the upper bound.
+
+```{r}
+bin_cut_point <- d_filt %>% 
+  group_by(trial_type) %>% 
+  summarise(max_bin = max(Bin)) %>% 
+  pull(max_bin) %>% 
+  min()
+
+by_bin %<>% filter(Bin <= bin_cut_point)
+```
+
+Map the t-test to each time bin and store it as a variable in the by_bin data frame. 
+
+```{r}
+by_bin %<>% mutate(model = map(data, run_t_test, alternative = "greater"))
+```
+
+2. Take the time-bins whose test passed the threshold statistic (e.g., t > 2), and group them by adjacency. We will call these time-clusters. To do this, we extract the t-stats and their bin numbers and filter by the threshold defined above.
+
+```{r}
+# get t-stats for each model
+t_df <- by_bin %>% 
+  mutate(glance = map(model, broom::glance)) %>% 
+  unnest(glance, .drop = TRUE) %>% 
+  select(Bin, statistic, p.value)
+
+# filter by t threshold 
+t_df_filt <- t_df %>% filter(statistic >= threshold_t)
+t_df_filt
+```
+
+3. For each time-cluster, calculate the sum of the statistics for the time-bins inside it.
+
+The technical challenge here is to figure out how to define the clusters based on the Bin vector. Here is my solution: 
+
+```{r}
+# make clusters for the bin vector; this feels a little hacky
+# function that takes a vector of bin numbers
+# returns a vector of the same length with clusters defined
+# works by checking whether the current bin number is not +1 greater than prev bin
+# if it is greater than 1, then we have detected the end of a cluster and we should name it
+
+define_clusters <- function(df) {
+  if (nrow(df) == 0) {
+    df
+  } else {
+    bin_vect <- df %>% pull(Bin)
+    cluster_iter <- 1
+    cluster_vector <- vector(length = length(bin_vect))
+    # build the cluster vector
+    for (bin in 1:length(bin_vect)) {
+      if (bin == 1) {
+        curr_cluster_name <- paste("cluster", as.character(cluster_iter), sep = "_")
+        cluster_vector[bin] <- curr_cluster_name
+      } else {
+        if (bin_vect[bin] == bin_vect[bin-1] + 1 ) {
+          cluster_vector[bin] <- curr_cluster_name
+        } else {
+          cluster_iter <- cluster_iter + 1
+          curr_cluster_name <- paste("cluster", as.character(cluster_iter), sep = "_")
+          cluster_vector[bin] <- curr_cluster_name
+        } 
+      }
+    }
+    mutate(df, cluster = cluster_vector)
+    
+  }
+}
+
+# get clusters
+t_df_filt %<>% define_clusters(.)
+t_df_filt
+```
+
+We can see that we get three clusters of t-stats that passed the threshold.
+
+Next, we calculate the sum of the statistics for the time-bins inside each cluster.
+
+```{r}
+obs_t <- t_df_filt %>% 
+  group_by(cluster) %>% 
+  summarise(sum_t = sum(statistic)) 
+
+obs_t
+```
+
+Take the largest of the cluster-level statistics and store it for later. This is the t-value that we will use to compare against our null distribution generated by the permutations that we will create in the next part of the program.
+
+```{r}
+largest_t <- obs_t %>% pull(sum_t) %>% max()
+largest_t
+```
+
+### Generate null distribution by shuffling data
+
+We will take our data and randomly shuffle it, assigning participants randomly to each condition. Then we will perform steps (1)-(3) on the shuffled dataset and save the biggest sum-statistic from each permutation analysis. 
+
+TODO: figure out whether we should be shuffling and resassigning at the level of the Mean X and PD timecourse data? Right now, we are shuffling the aggregated trial-level data. 
+
+A note from the supplemental materials in Cesana-Arlotti et. al., (2018):  
+
+> To evaluate the significance of the test, we recomputed the same analysis on 1000 sets of random permutations. The permutations were computed by randomly assigning the participants to the condition labels (Inference/No Inference), taking care to maintain the N of the two conditions identical to the N available for the original data.
+
+```{r}
+# global variables for setting up shuffling and 
+# random assignment to condition
+set.seed(7)
+
+permute_data <- function(df) {
+  subs_df_shuffle <- df %>% 
+    ungroup() %>% 
+    distinct(Participant, trial_type) %>% 
+    unique() %>%
+    mutate(old_trial_type = trial_type,
+      trial_type = sample(trial_type)) %>% 
+    select(Participant, trial_type)
+  
+  df %>% 
+    ungroup() %>% 
+    select(-trial_type) %>% 
+    left_join(., subs_df_shuffle, by = "Participant")
+}
+
+```
+
+Create list of data frames of permuted datasets.
+
+```{r, message=F}
+n_permutations <- 1000
+list_dfs <-  vector("list", length(1:n_permutations))
+
+system.time(
+  for (n_sim in n_permutations) {
+    list_dfs[[n_sim]] <- permute_data(d_filt)
+  }
+)
+```
+
+Now that we have our list of permuted datasets, we map the statistical test using a wrapper function to each time bin in each dataset. 
+
+Note that this takes about 4.5 minutes to do 1000 permutations.
+
+```{r}
+t_test_by_bin <- function(df, alternative = "two.sided", bin_cut) {
+  by_bin_df <- df %>% 
+    group_by(Bin) %>% 
+    nest()
+  by_bin_df %<>% filter(Bin <= bin_cut)
+  by_bin_df %>% mutate(model = map(data, run_t_test, 
+                                   alternative = alternative))
+}
+
+system.time(
+  null_dist_1 <- map(list_dfs, t_test_by_bin, alternative = "greater", bin_cut = bin_cut_point)
+)
+```
+
+Next, we need to extract the t-stats, filtering by the pre-defined threshold. Note that this takes about 4.5 minutes to do 1000 permutations.
+
+```{r}
+extract_t <- function(df, t_threshold) {
+  # get t-stats for each model
+  df %>% 
+    mutate(glance = map(model, broom::glance)) %>% 
+    unnest(glance, .drop = TRUE) %>% 
+    select(Bin, statistic, p.value) %>% 
+    filter(statistic >= t_threshold)
+}
+
+system.time(
+ null_dist_2 <- map(blah, extract_t, t_threshold = threshold_t) 
+)
+```
+
+Then, we make clusters for each filtered data frame of Bins that have above-threshold t-values. TODO: What to do if there weren't any significant t-stats during the by_bin pass? Right now, I'm just ignoring these simulations
+
+```{r}
+system.time(
+  null_dist_3 <- map(blah2, define_clusters)  
+)
+```
+
+Then, we sum the t-stats for each cluster and store the largest value for each simulation. TODO: What to do if there weren't any significant t-stats during the by_bin pass? Right now, I'm just ignoring these simulations.
+
+```{r}
+sum_t_stats <- function(df) {
+  if(nrow(df) == 0) {
+    NA
+  } else {
+    df %>% 
+      group_by(cluster) %>% 
+      summarise(sum_t = sum(statistic)) %>% 
+      pull(sum_t) %>% 
+      max()
+  }
+}
+
+system.time(
+  null_dist_4 <- map(blah3, sum_t_stats) %>% unlist() %>% data.frame(null_t = .)  
+)
+```
+
+Now we have a data frame with a single column that is a distribution of t-stats from the randomly shuffled datasets. We can use this as a null distribution against which we can compare the cluster-statistic measured from our actual data in step (3). This will get us a p-value, or the probability of that we would have observed our data or something more extreme if the null were true.
+
+We can visualize this null distribution along with our sample sum-statistic.
+
+```{r}
+null_dist_4 %>% ggplot(aes(x = null_t)) + 
+  geom_histogram() +
+  geom_vline(xintercept = largest_t, 
+             color = "red", 
+             linetype = "dashed",
+             size = 1)
+```
+
+Finally, to compute the p-value we compare the cluster-statistic from step (3) to the distribution found in (6). 
+
+```{r}
+nulls <- null_dist_4 %>% 
+  filter(!is.na(null_t)) %>% 
+  mutate(sig = null_t >= largest_t) %>% # test if the null-sum stat is greater than the the sum-stat for the largest cluster
+  pull(sig)
+
+( sum(nulls) / length(nulls) ) %>% round(3) # get the p-value rounded to 3 digits
+```
+
+Some key notes on this whole approach from Marvis and Oostenvald (2007):
+
+> The p-values for all eight clusters
+are calculated under the permutation distribution of the maximum
+(absolute value) cluster-level statistic and not under the
+permutation distribution of the second largest, third largest, etc.
+The choice for the maximum cluster-level statistic (and not the
+second largest, third largest, etc.) results in a statistical test that
+controls the FA rate for all clusters (from largest to smallest), but
+does so at the expense of a reduced sensitivity for the smaller
+clusters (reduced in comparison with a statistical test that is specific
+for the second, third, ..., largest cluster-level statistic).
+
+> This is a test statistic for a one-sided test; for a two-sided test, we select test statistics whose absolute value is larger than some threshold (in step 2) and we take the cluster-level statistic that is largest in absolute value (in step 4). Also, for a two-sided test, the clustering in step 3 is performed separately for samples with a positive and a negative t-value.
+
+> The cluster-based test statistic depends on the threshold that is used to select samples for clustering. In our example, this thresh- old was the 97.5th quantile of a T-distribution, which is used as a critical value in a parametric two-sided t-test at alpha-level 0.05. As will be shown later in Section 4, this threshold does not affect the FA rate of the statistical test. However, this threshold does affect the sensitivity of the test. For example, weak but long-lasting effects are not detected when the threshold is large.
