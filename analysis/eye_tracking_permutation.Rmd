@@ -47,7 +47,7 @@ Note that we get parsing errors for the MeanPupil data:
 
 Join the adult data. 
 
-  * Note: if you just naively try to joing the data frames, you get a lot of extra rows added. This likely means there are multiple matches across the two datasets. After some digging, I found out this happens because of the `Count` variable being different across the dataframes, which doesn't make sense. I'm going to remove the column since it doesn't seem critical for the analyses, but I should so some more digging. 
+  * Note: if you just naively try to joining the data frames, you get a lot of extra rows added. This likely means there are multiple matches across the two datasets. Do we get the same number of data points for each participant across the meanX and PD measures?
   
 ```{r}
 data_points <- d_meanx_adults %>% count(Participant) 
@@ -55,7 +55,7 @@ data_points$n_pd <- d_pd_adults %>% count(Participant) %>% pull(n)
 data_points %<>% mutate(diff_n = n == n_pd)
 data_points
 ```
-  
+yes, but note that the `Count` variable is different across the dataframes. I'm going to remove the column since it doesn't seem critical for the analyses, but I should so some more digging. 
 
 ```{r}
 d_meanx_adults %<>% select(-Count)
@@ -71,9 +71,9 @@ data_points %<>% mutate(diff_n = abs(n_after_join - n),
                         diff_n_after_join = n == n_after_join) 
 data_points
 ```
-Ugh, all of them and it doesn't look systematic. TODO: some more digging on why the join isn't working like I expect it should.
+Ugh, the join is still generating extra data points for each participant and it doesn't look systematic. TODO: some more digging on why the join isn't working like I expect it should.
 
-For now, I'm just going to use bind_cols and see what the data looks like. This is riskier than the join approach because bind_cols() joins by position, so we are relying on the structure of the data files being identical. 
+For now, I'm just going to use `bind_cols()` and see what the data looks like. This is riskier than the join approach because `bind_cols()` joins by position, so we are relying on the structure of the data files being identical. 
 
 ```{r}
 d_adults <- bind_cols(d_meanx_adults, d_pd_adults %>% select(MeanPupil))
@@ -102,12 +102,12 @@ My best guess is that this is an error in the Pupil Dilation computation output 
 d %>% filter(Participant == 7, Trial == 4, Experiment == "19-Inf") %>% head()
 ```
 
-`read_tsv()` just replaced these values with NAs -- seems reasonable. 
+`read_tsv()` just replaced these weird values with NAs -- seems reasonable. 
 
 ### Check out the data.
 
 ```{r}
-glimpse(d)
+glimpse(d) 
 glimpse(d_adults)
 ```
 
@@ -119,7 +119,7 @@ Varible creation and renaming.
 # tidy up adult data
 d_adults %<>% 
   mutate(age_group_bin = "adults",
-         age_group = NA,
+         age_group = "adult",
          InferenceCondition = ifelse(InferenceCondition == 1, "Inf", "NoInf"),
          Participant =  str_c(Participant, age_group_bin, sep = "_")) %>% 
   rename(trial_type = InferenceCondition,
@@ -129,24 +129,27 @@ d_adults %<>%
 
 # tidy up kid data 
 d %<>%
-  mutate(age_group_bin = "children") %>% 
+  mutate(age_group_bin = "children",
+         Trial = 1) %>% 
   separate(col = Experiment, into = c("age_group", "trial_type")) %>% 
   mutate(Participant =  str_c(Participant, trial_type, sep = "_"))
 ```
 
-Now we join the two data frames together.
+Now we join the two data frames together using bind_rows()
 
 ```{r}
-
+expected_nrows <- nrow(d) + nrow(d_adults)
+d %<>% bind_rows(d_adults)
+nrow(d) == expected_nrows
 ```
+Ok, we get the expected number of rows after joining the data frames. 
 
+### Check and tidy data
 
-### Check data
-
-Write some data checks to cross-reference with the values reported in the paper. Mostly to check for parsing errors.
+Write some data checks to cross-reference with the values reported in the paper. Mostly to check for parsing errors. Do we have two trial types: inference vs. no-inference.
 
 ```{r}
-d$Experiment %>% unique()
+d$trial_type %>% unique()
 ```
 
 Gather pupil dilation and mean_x into one `measurement` variable.
@@ -171,7 +174,7 @@ d %>%
   count(age_group, trial_type) 
 ```
 
-This looks reasonable. Now we try to reproduce the timecourse plots and the cluster-based permutation analyses.
+This looks reasonable and matches the sample sizes reported in the paper. Now we try to reproduce the timecourse plots and the cluster-based permutation analyses.
 
 ## Goal of permutation analysis
 
@@ -181,13 +184,13 @@ From Cesana-Arlotti et. al.:
 
 ### Measures:
 
-* `pupil change`: pupil dilation has been found to be a marker for cognitive effort, memory load and attentional focus
-* `proportion of trials shifting to cup` (inference vs. no-inference):  Shifts from the visible object to the cup are an indication that infants deploy a particular a scanning strategy during inference making
-* `eye position onscreen` (Mean x gaze position onscreen): the variation of eye position onscreen as if it eyes were smoothly transitioning across different elements of the screen
+  * `pupil change`: pupil dilation has been found to be a marker for cognitive effort, memory load and attentional focus
+  * `proportion of trials shifting to cup` (inference vs. no-inference):  Shifts from the visible object to the cup are an indication that infants deploy a particular a scanning strategy during inference making
+  * `eye position onscreen` (Mean x gaze position onscreen): the variation of eye position onscreen as if it eyes were smoothly transitioning across different elements of the screen
 
 ## Participants & Data filters
 
-I think the data were already filtered based on this criterion
+The data were already filtered based on this criterion
 
 > Infants' eye gaze data from Experiments 3-6 (N = 96) were analyzed. Trials in which less than 70% of the gaze samples were collected were excluded from analysis. With these criteria 4 participants were excluded (1 in Experiment 5 and 3 in Experiment 6) because no valid trial was retained.
 
@@ -201,7 +204,7 @@ I think the data were already filtered based on this criterion
 
 ## Target stats
 
-1. [KM: Where are the stats for the cluster-based analyses of pupil dilation and mean x???]
+1. **[KM: Where are the stats for the cluster-based analyses of pupil dilation and mean x???]**
 
 2. Proportion of tirals with with visible-object-to-cup shifts: We ran a two-way ANOVA with proportion of trials as the dependent variable, Age Group (12/19) and Condition (Inference/No-Inference) as an independent variables. As reported in the main text, the analysis revealed an effect of Condition, no effect of Age and no interaction. Infants shifted from the object to the cup in more trials when the Potential Deduction phase required an inference than when it did not (MInference = 71%, MNo_Inference = 50%; F(1, 88) = 10.4, P = 0.002; fig. S2). 
 
@@ -242,6 +245,10 @@ ms %>%
 
 There are some differences between these plots and Figure 3 in the paper. First, the large baseline differences between inference and no-inferences in the 12-month-olds X-corrdinate data. Also, an overall point that these are not super convincing curves, and I'm not sure why the 19-month-olds' X-coordinate looking patterns look so different from the 12-month-olds.
 
+** KM hypothesis: they clipped the range of the X-values that went into the computation. The y-axis in the figure starts at 1000 and goes to 1200. Do they say this anywhere in the supplement? **
+
+** KM hypothesis: the "filtered" data are not filtering out at the trial level. They note in their supplement that "Trials in which less than 70% of the gaze samples were collected were excluded from analysis." **
+
 ## Analysis
 
 > We analyzed the temporal dynamics of the mean x gaze coordinates (hereafter mean x) and the pupil changes in the same temporal region.
@@ -258,19 +265,24 @@ Pupil dilation were calculated as follows.
   
 Thus, pupil dilation changes reflected actual differences at each individual trial for each individual infant.
 
-KM: they provided the computed pupil dilation, so we didn't actually compute this.
+** KM: they provided the computed pupil dilation, so we didn't actually re-compute this measure. **
 
 ### Permutation analysis
  
-Finally, for the pupil dilation changes as well as the mean x, we ran a cluster mass test coupled with a randomization procedure (24, 25). The details of our procedure were as follows. 
+> Finally, for the pupil dilation changes as well as the mean x, we ran a cluster mass test coupled with a randomization procedure (24, 25). The details of our procedure were as follows. 
 
   * We computed unpaired t-tests at each time bin for the mean x gaze coordinates and the pupil dilation changes, separately for 12- and 19- month-olds. 
   * For pupil dilation changes, the tests were one-tailed because, based on our hypothesis and the literature, we expect an inference to have a cognitive cost resulting in higher pupil dilation, as for other cognitive activities implying higher effort. 
   * For mean x, the tests were two-tailed we have no hypothesis as to where infants look in the particular moments of the Potential Deduction phase we analyzed. 
   * Temporal cluster statistics were defined as the sum of the t values thresholded at p=0.05 on consecutive time bins. To evaluate the significance of the test, we recomputed the same analysis on 1000 sets of random permutations. The permutations were computed by randomly assigning the participants to the condition labels (Inference/No Inference), taking care to maintain the N of the two conditions identical to the N available for the original data.
   
+** KM note: I couldn't actually find where they report a single p-value for the permutatation test.**
+
+
+ Let's just start with one age group (12 months) and one DV (pupil dilation) to build the cluster-based permuation analysis.
+  
 ```{r}
-d_filt <- ss %>% filter(age_group == 12, measurement_type == "PD") # just start with one age group and one DV to build analysis
+d_filt <- ss %>% filter(age_group == 12, measurement_type == "PD")
 num_sub <- d_filt %>% 
   ungroup() %>% 
   select(Participant, trial_type) %>% 
@@ -279,12 +291,22 @@ num_sub <- d_filt %>%
   pull(n) %>% max()
 ```
 
+Define t-thresholds. This is important for filtering to keep just the "significant" time bins later in the analysis. 
+
+** TODO: figure out the right n to use for a unpaired t-test with different sized groups. **
+
 ```{r}
 threshold_t <- qt(p = 1 - .05/2, df = num_sub - 1) # pick threshold t based on alpha = .05 two tailed
 threshold_t_one_tailed <- qt(p = 1 - .05, df = num_sub-1) # pick threshold t based on alpha = .05 one tailed
 ```
 
 ## Rolling my own permutation analysis
+
+The high-level overview of the anlaysis steps are:
+
+  1. Run a test on each time bin that quantifies the statistical significance of the effect. This acts as a “first pass,” and we 
+  2. Group together into clusters all adjacent bins that get through this first pass. 
+  3. Permute stuff to generate null distribution: shuffle the data, performing this test-then-cluster on each iteration of the shuffled data. This shuffled data tells us what kinds of clusters we should expect if there were no effect (i.e., randomly scrambled data).
 
 First, we need to get the summed t-statitistic that provides the strongest evidence of a difference between the two trial types. We do this by looking for clusters of significant differences in the timecourse, with clusters defined by adjacency in time.
 
@@ -297,7 +319,7 @@ by_bin <- d_filt %>%
   nest()
 ```
 
-KM note: I ran into a bug when trying to map the t-test to each time bin. There are two extra time bins in the No-Inference condition. So we need to find the max time bin that both conditions have and use that as the upper bound.
+** KM note: I ran into a bug when trying to map the t-test to each time bin. There are two extra time bins in the No-Inference condition. So we need to find the max time bin that both conditions have and use that as the upper bound. **
 
 ```{r}
 bin_cut_point <- d_filt %>% 
@@ -331,10 +353,10 @@ t_df_filt
 
 3. For each time-cluster, calculate the sum of the statistics for the time-bins inside it.
 
-The technical challenge here is to figure out how to define the clusters based on the Bin vector. Here is my solution: 
+The technical challenge here is to figure out how to define the clusters based on the Bin vector. 
 
 ```{r}
-t_df_filt %<>% define_clusters(.)
+t_df_filt %<>% define_clusters()
 t_df_filt
 ```
 
@@ -343,25 +365,23 @@ We can see that we get three clusters of t-stats that passed the threshold.
 Next, we calculate the sum of the statistics for the time-bins inside each cluster.
 
 ```{r}
-obs_t <- t_df_filt %>% 
+observed_t_vals <- t_df_filt %>% 
   group_by(cluster) %>% 
   summarise(sum_t = sum(statistic)) 
 
-obs_t
+observed_t_vals
 ```
 
 Take the largest of the cluster-level statistics and store it for later. This is the t-value that we will use to compare against our null distribution generated by the permutations that we will create in the next part of the program.
 
 ```{r}
-largest_t <- obs_t %>% pull(sum_t) %>% max()
+largest_t <- observed_t_vals %>% pull(sum_t) %>% max()
 largest_t
 ```
 
 ### Generate null distribution by shuffling data
 
 We will take our data and randomly shuffle it, assigning participants randomly to each condition. Then we will perform steps (1)-(3) on the shuffled dataset and save the biggest sum-statistic from each permutation analysis. 
-
-TODO: figure out whether we should be shuffling and resassigning at the level of the Mean X and PD timecourse data? Right now, we are shuffling the aggregated trial-level data. 
 
 A note from the supplemental materials in Cesana-Arlotti et. al., (2018):  
 
@@ -373,46 +393,44 @@ So we create a list of data frames. Each data frame is a permuted dataset.
 # global variables for setting up shuffling and 
 set.seed(7)
 n_permutations <- 1000
-list_dfs <-  vector("list", length(1:n_permutations))
+permuted_dfs <-  vector("list", length(1:n_permutations))
 
 system.time(
-  for (n_sim in n_permutations) {
-    list_dfs[[n_sim]] <- permute_data(d_filt)
+  for (n_sim in 1:n_permutations) {
+    permuted_dfs[[n_sim]] <- permute_data(d_filt)
   }
 )
 ```
 
-Now that we have our list of permuted datasets, we map the statistical test using a wrapper function to each time bin in each dataset. 
-
-Note that this takes about 4.5 minutes to do 1000 permutations.
+Now that we have our list of permuted datasets, we map the statistical test using a wrapper function to each time bin in each dataset. **Note that this takes about 4.5 minutes to do 1000 permutations.**
 
 ```{r}
 system.time(
-  null_dist_1 <- map(list_dfs, t_test_by_bin, alternative = "greater", bin_cut = bin_cut_point)
+  null_dist_1 <- map(permuted_dfs, t_test_by_bin, alternative = "greater", bin_cut = bin_cut_point)
 )
 ```
 
-Next, we need to extract the t-stats, filtering by the pre-defined threshold. Note that this takes about 4.5 minutes to do 1000 permutations.
+Next, we need to extract the t-stats, filtering by the pre-defined threshold. **Note that this takes about 4.5 minutes to do 1000 permutations.**
 
 ```{r}
 system.time(
- null_dist_2 <- map(blah, extract_t, t_threshold = threshold_t) 
+ null_dist_2 <- map(null_dist_1, extract_t, t_threshold = threshold_t) 
 )
 ```
 
-Then, we make clusters for each filtered data frame of Bins that have above-threshold t-values. TODO: What to do if there weren't any significant t-stats during the by_bin pass? Right now, I'm just ignoring these simulations
+Then, we make clusters for each filtered data frame of Bins that have above-threshold t-values. **KM: What to do if there weren't any significant t-stats during the by_bin pass? Right now, I'm just ignoring these simulations.**
 
 ```{r}
 system.time(
-  null_dist_3 <- map(blah2, define_clusters)  
+  null_dist_3 <- map(null_dist_2, define_clusters)  
 )
 ```
 
-Then, we sum the t-stats for each cluster and store the largest value for each simulation. TODO: What to do if there weren't any significant t-stats during the by_bin pass? Right now, I'm just ignoring these simulations.
+Then, we sum the t-stats for each cluster and store the largest value for each simulation. **KM: What to do if there weren't any significant t-stats during the by_bin pass? Right now, I'm just ignoring these simulations.**
 
 ```{r}
 system.time(
-  null_dist_4 <- map(blah3, sum_t_stats) %>% unlist() %>% data.frame(null_t = .)  
+  null_dist_4 <- map(null_dist_3, sum_t_stats) %>% unlist() %>% data.frame(null_t = .)  
 )
 ```
 
@@ -421,10 +439,13 @@ Now we have a data frame with a single column that is a distribution of t-stats 
 We can visualize this null distribution along with our sample sum-statistic.
 
 ```{r}
-null_dist_4 %>% ggplot(aes(x = null_t)) + 
+null_dist_4 %>% 
+  filter(null_t < 100) %>% 
+  ggplot(aes(x = null_t)) + 
   geom_histogram() +
-  geom_vline(xintercept = largest_t, 
-             color = "red", 
+  geom_vline(aes(xintercept = sum_t),
+             data = observed_t_vals,
+             color = "darkorange", 
              linetype = "dashed",
              size = 1)
 ```
@@ -439,6 +460,7 @@ nulls <- null_dist_4 %>%
 
 crit_p <- ( sum(nulls) / length(nulls) ) %>% round(3) # get the p-value rounded to 3 digits
 crit_p
+# beepr::beep(sound = 3)
 ```
 
 ### Appendix
