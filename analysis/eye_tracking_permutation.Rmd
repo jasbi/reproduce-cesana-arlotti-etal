@@ -10,47 +10,143 @@ knitr::opts_chunk$set(warning=F, cache=T, message=F)
 ```
 
 ```{r}
-library(magrittr)
-library(tidyverse)
+source("permutation_helpers.R")
+library(magrittr); library(tidyverse)
 theme_set(ggthemes::theme_few())
 ```
 
 ## Read the timecourse data
 
-% In each file, data were stored with the following columns:
+From Cesana-Arlotti et. al.'s codebook:
 
-	Participant % Participants' ID number.
-	Trial % The trial corresponding to the data point.	
-	Bin	% Indicates the frame in which the data was collected by the Eyectracker (60 Hz)
-	MovieID % Unique Scenes ID 
-	Experiment %  indicates the age group and the Inference vs No_Inference condition
-	X	% The average gaze position on the X-axis in the corresponding bin (see main text and SOM).
-	PD %  The average change in pupil diameter from the baseline in the corresponding Bin (see main text and SOM).
+> In each file, data were stored with the following columns:
 
+	* Participant % Participants' ID number.
+	* Trial % The trial corresponding to the data point.	
+	* Bin	% Indicates the frame in which the data was collected by the Eyectracker (60 Hz)
+	* MovieID % Unique Scenes ID 
+	* Experiment %  indicates the age group and the Inference vs No_Inference condition
+	* X	% The average gaze position on the X-axis in the corresponding bin (see main text and SOM).
+	* PD %  The average change in pupil diameter from the baseline in the corresponding Bin (see main text and SOM).
+
+```{r read adult data}
+data_path_adults <- "../data/AdultsData"
+files_adults <- list.files(data_path_adults)
+pd_files <- files_adults[str_detect(string = files_adults, pattern = "Pup")]
+meanX_files <- files_adults[str_detect(string = files_adults, pattern = "MeanX")]
+
+# get data frames for each DV (4 files for each; 8 total)
+d_pd_adults <- pd_files %>% map_dfr(~ read_tsv(file.path(data_path_adults, .)))
+d_meanx_adults <- meanX_files %>% map_dfr(~ read_tsv(file.path(data_path_adults, .)))
+```
+
+Note that we get parsing errors for the MeanPupil data:
+
+  * 81 parsing failures in the `Inf_NoInf2_ScDown_Pup.txt` file
+  * 157 parsing failure in the `Inf_NoInf1_ScDown_Pup.txt` file
+
+Join the adult data. 
+
+  * Note: if you just naively try to joing the data frames, you get a lot of extra rows added. This likely means there are multiple matches across the two datasets. After some digging, I found out this happens because of the `Count` variable being different across the dataframes, which doesn't make sense. I'm going to remove the column since it doesn't seem critical for the analyses, but I should so some more digging. 
+  
+```{r}
+data_points <- d_meanx_adults %>% count(Participant) 
+data_points$n_pd <- d_pd_adults %>% count(Participant) %>% pull(n)
+data_points %<>% mutate(diff_n = n == n_pd)
+data_points
+```
+  
 
 ```{r}
+d_meanx_adults %<>% select(-Count)
+d_pd_adults %<>% select(-Count)
+d_adults <- left_join(d_meanx_adults, d_pd_adults, by = c("Participant", "Bin", "PhaseLabel", "InferenceCondition", "MovieID"))
+```
+
+Now let's check which participants are getting duplicates.
+
+```{r}
+data_points$n_after_join <- d_adults %>% count(Participant) %>% pull()
+data_points %<>% mutate(diff_n = abs(n_after_join - n),  
+                        diff_n_after_join = n == n_after_join) 
+data_points
+```
+Ugh, all of them and it doesn't look systematic. TODO: some more digging on why the join isn't working like I expect it should.
+
+For now, I'm just going to use bind_cols and see what the data looks like. This is riskier than the join approach because bind_cols() joins by position, so we are relying on the structure of the data files being identical. 
+
+```{r}
+d_adults <- bind_cols(d_meanx_adults, d_pd_adults %>% select(MeanPupil))
+```
+
+```{r read kid data}
 data_path <- "../data/InfantsData/ByBin"
 files <- list.files(data_path)
 d <- files %>% map_dfr(~ read_tsv(file.path(data_path, .)))
 ```
 
+Note that we are getting some parsing errors from the E3-byBin.txt data file. Here is the a summary of the issue: 
+
 ```{r}
-glimpse(d)
+problem_df <- read_tsv(file.path(data_path, files[1]))
+problems(problem_df)
 ```
 
-Some data checks.
+And here's what the data look like when viewed in excel:
+
+![Original Timecourse Plots](../figures/encoding_issue.png)
+
+My best guess is that this is an error in the Pupil Dilation computation output for trial 4 for participant 7. Let's check to see how read_tsv dealt with the parsing failure
+
+```{r}
+d %>% filter(Participant == 7, Trial == 4, Experiment == "19-Inf") %>% head()
+```
+
+`read_tsv()` just replaced these values with NAs -- seems reasonable. 
+
+### Check out the data.
+
+```{r}
+glimpse(d)
+glimpse(d_adults)
+```
+
+### Join adult and kid data
+
+Varible creation and renaming. 
+
+```{r}
+# tidy up adult data
+d_adults %<>% 
+  mutate(age_group_bin = "adults",
+         age_group = NA,
+         InferenceCondition = ifelse(InferenceCondition == 1, "Inf", "NoInf"),
+         Participant =  str_c(Participant, age_group_bin, sep = "_")) %>% 
+  rename(trial_type = InferenceCondition,
+         X = `EyeGaze(meanX)`,
+         PD = MeanPupil) %>% 
+  select(-PhaseLabel)
+
+# tidy up kid data 
+d %<>%
+  mutate(age_group_bin = "children") %>% 
+  separate(col = Experiment, into = c("age_group", "trial_type")) %>% 
+  mutate(Participant =  str_c(Participant, trial_type, sep = "_"))
+```
+
+Now we join the two data frames together.
+
+```{r}
+
+```
+
+
+### Check data
+
+Write some data checks to cross-reference with the values reported in the paper. Mostly to check for parsing errors.
 
 ```{r}
 d$Experiment %>% unique()
-```
-
-Separate age group and trial type information, which is currently store in the Experiment variable. 
-
-```{r}
-d %<>% separate(col = Experiment, into = c("age_group", "trial_type"))
-
-unique(d$age_group) # two age groups
-unique(d$trial_type) # two trial types
 ```
 
 Gather pupil dilation and mean_x into one `measurement` variable.
@@ -59,18 +155,12 @@ Gather pupil dilation and mean_x into one `measurement` variable.
 d %<>% gather(key = measurement_type, value = value, X:PD)
 ```
 
-Convert Bins (60 Hz) to time (seconds)
+Convert Bins (60 HZ; 1 HZ = 16.67ms) to time (seconds).
 
 ```{r}
 one_hz_in_ms <- 16.67
 d %<>% mutate(time_ms = Bin * one_hz_in_ms,
               time_sec = time_ms / 1000) 
-```
-
-Append experiment information to participant_id to make sure we track who was in what experiment.
-
-```{r}
-d %<>% mutate(Participant = str_c(Participant, trial_type, sep = "_"))
 ```
 
 Check how many participants we have in each experiment and age group. 
@@ -81,13 +171,13 @@ d %>%
   count(age_group, trial_type) 
 ```
 
-This looks reasonable. Now we should be able to reproduce the timecourse plots and cluster-based permutation analyses.
+This looks reasonable. Now we try to reproduce the timecourse plots and the cluster-based permutation analyses.
 
-## Goal of analysis
+## Goal of permutation analysis
 
-> However, the main aim of our research is to explore behavioral correlates of inference drawing online. To this purpose, eye tracking data during the Potential Deduction phase, as well as measures that relate infants' behavior during this phase with their response to outcomes inconsistent with a potential deduction.
+From Cesana-Arlotti et. al.:
 
-> Below, we analyze pupil change, eye position onscreen and proportion of trials in which infants' eyes shifted from the visible object onstage to the cup in perceptually identical scenes that either invited or did not require a logical deduction (respectively, Inference condition, Experiment 3 and 4 and No-inference condition, Experiment 5 and 6)
+> However, the main aim of our research is to explore behavioral correlates of inference drawing online. To this purpose, eye tracking data during the Potential Deduction phase, as well as measures that relate infants' behavior during this phase with their response to outcomes inconsistent with a potential deduction ... Below, we analyze pupil change, eye position onscreen and proportion of trials in which infants' eyes shifted from the visible object onstage to the cup in perceptually identical scenes that either invited or did not require a logical deduction (respectively, Inference condition, Experiment 3 and 4 and No-inference condition, Experiment 5 and 6)
 
 ### Measures:
 
@@ -97,7 +187,9 @@ This looks reasonable. Now we should be able to reproduce the timecourse plots a
 
 ## Participants & Data filters
 
-Infants' eye gaze data from Experiments 3-6 (N = 96) were analyzed. Trials in which less than 70% of the gaze samples were collected were excluded from analysis. With these criteria 4 participants were excluded (1 in Experiment 5 and 3 in Experiment 6) because no valid trial was retained.
+I think the data were already filtered based on this criterion
+
+> Infants' eye gaze data from Experiments 3-6 (N = 96) were analyzed. Trials in which less than 70% of the gaze samples were collected were excluded from analysis. With these criteria 4 participants were excluded (1 in Experiment 5 and 3 in Experiment 6) because no valid trial was retained.
 
 ## Target outcomes
 
@@ -109,7 +201,7 @@ Infants' eye gaze data from Experiments 3-6 (N = 96) were analyzed. Trials in wh
 
 ## Target stats
 
-1. [KM: Where are the stats for the cluster-based analyses of pupil dilation and mean x?]
+1. [KM: Where are the stats for the cluster-based analyses of pupil dilation and mean x???]
 
 2. Proportion of tirals with with visible-object-to-cup shifts: We ran a two-way ANOVA with proportion of trials as the dependent variable, Age Group (12/19) and Condition (Inference/No-Inference) as an independent variables. As reported in the main text, the analysis revealed an effect of Condition, no effect of Age and no interaction. Infants shifted from the object to the cup in more trials when the Potential Deduction phase required an inference than when it did not (MInference = 71%, MNo_Inference = 50%; F(1, 88) = 10.4, P = 0.002; fig. S2). 
 
@@ -123,11 +215,13 @@ Aggregate over participants and time bins
 
 ```{r}
 ss <- d %>% 
-  group_by(Participant, trial_type, age_group, time_sec, measurement_type, Bin) %>% 
+  group_by(Participant, trial_type, age_group, time_sec,
+           measurement_type, Bin) %>% 
   summarise(ss_m = mean(value, na.rm = T))
 
 ms <- ss %>% 
-  group_by(trial_type, age_group, time_sec, measurement_type, Bin) %>% 
+  group_by(trial_type, age_group, time_sec, 
+           measurement_type, Bin) %>% 
   summarise(n = n(),
             m = mean(ss_m), stdev = sd(ss_m)) %>%
   mutate(se = stdev / sqrt(n),
@@ -197,14 +291,6 @@ First, we need to get the summed t-statitistic that provides the strongest evide
 Concretely, we run a statistical test on each time-bin of the data (here an unpaired t-test). This can be any valid and appropriate statistic test that quantifies the probability of the effect: 
 
 ```{r}
-# wrapper function that we can over a list of data frames
-run_t_test <- function(df, paired = FALSE, alternative = "two.sided") {
-  t.test(ss_m ~ trial_type, 
-         alternative = alternative,
-         paired = paired,
-         data = df)
-}
-
 # nest the data by time bin 
 by_bin <- d_filt %>% 
   group_by(Bin) %>% 
@@ -248,40 +334,6 @@ t_df_filt
 The technical challenge here is to figure out how to define the clusters based on the Bin vector. Here is my solution: 
 
 ```{r}
-# make clusters for the bin vector; this feels a little hacky
-# function that takes a vector of bin numbers
-# returns a vector of the same length with clusters defined
-# works by checking whether the current bin number is not +1 greater than prev bin
-# if it is greater than 1, then we have detected the end of a cluster and we should name it
-
-define_clusters <- function(df) {
-  if (nrow(df) == 0) {
-    df
-  } else {
-    bin_vect <- df %>% pull(Bin)
-    cluster_iter <- 1
-    cluster_vector <- vector(length = length(bin_vect))
-    # build the cluster vector
-    for (bin in 1:length(bin_vect)) {
-      if (bin == 1) {
-        curr_cluster_name <- paste("cluster", as.character(cluster_iter), sep = "_")
-        cluster_vector[bin] <- curr_cluster_name
-      } else {
-        if (bin_vect[bin] == bin_vect[bin-1] + 1 ) {
-          cluster_vector[bin] <- curr_cluster_name
-        } else {
-          cluster_iter <- cluster_iter + 1
-          curr_cluster_name <- paste("cluster", as.character(cluster_iter), sep = "_")
-          cluster_vector[bin] <- curr_cluster_name
-        } 
-      }
-    }
-    mutate(df, cluster = cluster_vector)
-    
-  }
-}
-
-# get clusters
 t_df_filt %<>% define_clusters(.)
 t_df_filt
 ```
@@ -315,31 +367,11 @@ A note from the supplemental materials in Cesana-Arlotti et. al., (2018):
 
 > To evaluate the significance of the test, we recomputed the same analysis on 1000 sets of random permutations. The permutations were computed by randomly assigning the participants to the condition labels (Inference/No Inference), taking care to maintain the N of the two conditions identical to the N available for the original data.
 
-```{r}
-# global variables for setting up shuffling and 
-# random assignment to condition
-set.seed(7)
-
-permute_data <- function(df) {
-  subs_df_shuffle <- df %>% 
-    ungroup() %>% 
-    distinct(Participant, trial_type) %>% 
-    unique() %>%
-    mutate(old_trial_type = trial_type,
-      trial_type = sample(trial_type)) %>% 
-    select(Participant, trial_type)
-  
-  df %>% 
-    ungroup() %>% 
-    select(-trial_type) %>% 
-    left_join(., subs_df_shuffle, by = "Participant")
-}
-
-```
-
-Create list of data frames of permuted datasets.
+So we create a list of data frames. Each data frame is a permuted dataset.
 
 ```{r, message=F}
+# global variables for setting up shuffling and 
+set.seed(7)
 n_permutations <- 1000
 list_dfs <-  vector("list", length(1:n_permutations))
 
@@ -355,15 +387,6 @@ Now that we have our list of permuted datasets, we map the statistical test usin
 Note that this takes about 4.5 minutes to do 1000 permutations.
 
 ```{r}
-t_test_by_bin <- function(df, alternative = "two.sided", bin_cut) {
-  by_bin_df <- df %>% 
-    group_by(Bin) %>% 
-    nest()
-  by_bin_df %<>% filter(Bin <= bin_cut)
-  by_bin_df %>% mutate(model = map(data, run_t_test, 
-                                   alternative = alternative))
-}
-
 system.time(
   null_dist_1 <- map(list_dfs, t_test_by_bin, alternative = "greater", bin_cut = bin_cut_point)
 )
@@ -372,15 +395,6 @@ system.time(
 Next, we need to extract the t-stats, filtering by the pre-defined threshold. Note that this takes about 4.5 minutes to do 1000 permutations.
 
 ```{r}
-extract_t <- function(df, t_threshold) {
-  # get t-stats for each model
-  df %>% 
-    mutate(glance = map(model, broom::glance)) %>% 
-    unnest(glance, .drop = TRUE) %>% 
-    select(Bin, statistic, p.value) %>% 
-    filter(statistic >= t_threshold)
-}
-
 system.time(
  null_dist_2 <- map(blah, extract_t, t_threshold = threshold_t) 
 )
@@ -397,18 +411,6 @@ system.time(
 Then, we sum the t-stats for each cluster and store the largest value for each simulation. TODO: What to do if there weren't any significant t-stats during the by_bin pass? Right now, I'm just ignoring these simulations.
 
 ```{r}
-sum_t_stats <- function(df) {
-  if(nrow(df) == 0) {
-    NA
-  } else {
-    df %>% 
-      group_by(cluster) %>% 
-      summarise(sum_t = sum(statistic)) %>% 
-      pull(sum_t) %>% 
-      max()
-  }
-}
-
 system.time(
   null_dist_4 <- map(blah3, sum_t_stats) %>% unlist() %>% data.frame(null_t = .)  
 )
@@ -435,10 +437,13 @@ nulls <- null_dist_4 %>%
   mutate(sig = null_t >= largest_t) %>% # test if the null-sum stat is greater than the the sum-stat for the largest cluster
   pull(sig)
 
-( sum(nulls) / length(nulls) ) %>% round(3) # get the p-value rounded to 3 digits
+crit_p <- ( sum(nulls) / length(nulls) ) %>% round(3) # get the p-value rounded to 3 digits
+crit_p
 ```
 
-Some key notes on this whole approach from Marvis and Oostenvald (2007):
+### Appendix
+
+Some interesting points and caveats about the permutation approach from Marvis and Oostenvald (2007):
 
 > The p-values for all eight clusters
 are calculated under the permutation distribution of the maximum
