@@ -1,3 +1,23 @@
+Things we can reproduce:
+- Descriptive statistics and ANOVA results for looking time data.
+- Results are also robust to being re-run in Mixed-Effects-Models (except for the 12-month-olds)
+- Time course plots
+- Descriptive statistics and ANOVA for switch analysis
+- Switch analysis mainly driven by 19mo, no sig. result for 12mo when analyzed separately
+
+Things we cannot reproduce:
+- For 12 month olds results (experiment 2) do not hold up to Mixed model analysis. 
+- Cluster based analysis ??
+
+Questions:
+- Why were the videos of different length -> justify?
+- Why were they paced in different speed > justify?
+- How was the end of the deduction phase was determined -> check supplementary material if any info
+
+Things to do:
+- Cluster based (r-package)
+
+
 
 ## Experiment 1 and 2
 ### Looking time

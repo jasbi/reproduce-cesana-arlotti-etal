@@ -1,0 +1,105 @@
+---
+title: "Cesana et al: Means and ANOVA results, Exp 1-4"
+author: ""
+date: "17 4 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(CODreports) # custom report functions
+library(afex)
+library(langcog)
+```
+
+```{r data processing}
+data1 <- read_tsv("../data/InfantsData/ByParticipant_LookingTimeAndOculomotorMeasures/E3-byParticipant.txt") %>%
+  mutate(age = "19mo",
+         condition = "inference",
+         Participant = paste(Participant,age,condition,sep="_"))
+
+data2 <- read_tsv("../data/InfantsData/ByParticipant_LookingTimeAndOculomotorMeasures/E4-byParticipant.txt") %>%
+  # Column names in this data file are different from the others
+  set_colnames(c("Participant","LTDiff","Shift","X","PD"))%>%
+  mutate(age = "12mo",
+         condition = "inference",
+         Participant = paste(Participant,age,condition,sep="_"))
+
+data3 <- read_tsv("../data/InfantsData/ByParticipant_LookingTimeAndOculomotorMeasures/E5-byParticipant.txt") %>%
+  mutate(age = "19mo",
+         condition = "no_inference",
+         Participant = paste(Participant,age,condition,sep="_"))
+
+data4 <- read_tsv("../data/InfantsData/ByParticipant_LookingTimeAndOculomotorMeasures/E6-byParticipant.txt") %>%
+  mutate(age = "12mo",
+         condition = "no_inference",
+         Participant = paste(Participant,age,condition,sep="_"))
+
+data <- bind_rows(data1,data2,data3,data4)
+
+str(data)
+```
+
+# Target outcomes: Means and ANOVAs for Switch Analysis
+## Data from Experiments 3-5
+By the end of this phase, infants also displaced their eyes toward the cup more markedly (Fig. 3, B and C, and supplemen- tary materials) and switched their focus from the visible object to the cup in more trials (Minference = 71%, Mno_inference = 50%, F1,88 = 10.4, P = 0.002, two-way ANOVA; fig. S2 and supplementary
+materials) when a deduction was needed than when it was not.
+
+### Check means reported
+```{r}
+## Means for switching by condition (as reported in the paper)
+data %>%
+  group_by(condition)%>%
+  summarise(mean = mean(Shift))
+
+## Means for switching by condition and age (not reported in the paper)
+data %>%
+  group_by(condition,age)%>%
+  summarise(mean = mean(Shift))
+
+
+## Means for switching in inference condition
+compareValues(reportedValue = 0.71, obtainedValue = mean(data$Shift[data$condition=="inference"]) , isP = F)
+
+
+## Means for switching in no inference condition
+compareValues(reportedValue = 0.50, obtainedValue = mean(data$Shift[data$condition=="no_inference"]) , isP = F)
+
+
+```
+### Check ANOVA values
+```{r}
+## compute anova
+e1_anova = aov_ez("Participant","Shift",data,between=c("age","condition"))
+
+## check values
+compareValues(reportedValue = 10.4, obtainedValue = e1_anova$anova_table$F[2], isP = F)
+compareValues(reportedValue = .002, obtainedValue = e1_anova$anova_table$`Pr(>F)`[2], isP = T)
+
+```
+### Plot and comparison by age group
+```{r}
+## t tests for each age group separately
+
+t.test(Shift ~ condition, data = data%>%filter(age=="12mo"))
+
+t.test(Shift ~ condition, data = data%>%filter(age=="19mo"))
+
+
+d.p <- data %>%
+  group_by(condition, age)%>%
+  multi_boot_standard(col = "Shift")
+
+ggplot() +
+  geom_jitter(data = data, aes(x = age , y = Shift, alpha = .2, col = condition), width = .1,height = .0)+
+  geom_pointrange(data = d.p,aes(x = age, y = mean, col = condition ,ymin = ci_lower, ymax = ci_upper), 
+                  position = position_dodge(width = .5), size = 1) + 
+  guides(alpha = F)+
+  ggtitle("Shift analysis")+
+  theme_few() + 
+  scale_colour_solarized()
+
+
+
+```

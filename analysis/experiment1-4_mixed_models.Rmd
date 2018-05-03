@@ -9,21 +9,22 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(afex)
+library(langcog)
 ```
 
 
 ```{r data processing}
 
-data1 <- read_tsv("data/InfantsData/ByTrial_LookingTime/E1-byTrial.txt")
+data1 <- read_tsv("../data/InfantsData/ByTrial_LookingTime/E1-byTrial.txt")
 str(data1)
 
-data2 <- read_tsv("data/InfantsData/ByTrial_LookingTime/E2-byTrial.txt")
+data2 <- read_tsv("../data/InfantsData/ByTrial_LookingTime/E2-byTrial.txt")
 str(data2)
 
-data3 <- read_tsv("data/InfantsData/ByTrial_LookingTime/E3-byTrial.txt")
+data3 <- read_tsv("../data/InfantsData/ByTrial_LookingTime/E3-byTrial.txt")
 str(data3)
 
-data4 <- read_tsv("data/InfantsData/ByTrial_LookingTime/E4-byTrial.txt")
+data4 <- read_tsv("../data/InfantsData/ByTrial_LookingTime/E4-byTrial.txt")
 str(data4)
 ```
 Visualizing the data in a different way thna barplots.
@@ -111,6 +112,10 @@ summary(m1)
 lm1 <- lmer(log(LookingTime) ~ Outcome + (Outcome|Participant) + (1|Couple), data = data1)
 summary(lm1)
 
+# P values based on z approximation
+coefs <- data.frame(coef(summary(m1)))
+coefs$p.z <- 2 * (1 - pnorm(abs(coefs$t.value)))
+coefs
 
 #ex2
 m2 <- lmer(LookingTime ~ Outcome + (Outcome|Participant) + (1|Couple), data = data2)
@@ -118,6 +123,11 @@ summary(m2)
 
 lm2 <- lmer(log(LookingTime) ~ Outcome + (Outcome|Participant) + (1|Couple), data = data2)
 summary(lm2)
+
+# P values based on z approximation
+coefs <- data.frame(coef(summary(m2)))
+coefs$p.z <- 2 * (1 - pnorm(abs(coefs$t.value)))
+coefs
 
 
 #ex3
@@ -127,6 +137,10 @@ summary(m3)
 lm3 <- lmer(log(LookingTime) ~ Outcome + (Outcome|Participant) + (1|Couple), data = data3)
 summary(lm3)
 
+# P values based on z approximation
+coefs <- data.frame(coef(summary(m3)))
+coefs$p.z <- 2 * (1 - pnorm(abs(coefs$t.value)))
+coefs
 
 #ex 4
 m4 <- lmer(LookingTime ~ Outcome + (Outcome|Participant) + (1|Couple), data = data4)
@@ -134,5 +148,10 @@ summary(m4)
 
 lm4 <- lmer(log(LookingTime) ~ Outcome + (Outcome|Participant) + (1|Couple), data = data4)
 summary(lm4)
+
+# P values based on z approximation
+coefs <- data.frame(coef(summary(m4)))
+coefs$p.z <- 2 * (1 - pnorm(abs(coefs$t.value)))
+coefs
 ```
 
