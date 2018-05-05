@@ -3,7 +3,7 @@ Things we can reproduce:
 - Results are also robust to being re-run in Mixed-Effects-Models (except for the 12-month-olds)
 - Time course plots
 - Descriptive statistics and ANOVA for switch analysis
-- Switch analysis mainly driven by 19mo, no sig. result for 12mo when analyzed separately
+
 
 Things we cannot reproduce:
 - For 12 month olds results (experiment 2) do not hold up to Mixed model analysis. 
@@ -12,7 +12,8 @@ Things we cannot reproduce:
 Questions:
 - Why were the videos of different length -> justify?
 - Why were they paced in different speed > justify?
-- How was the end of the deduction phase was determined -> check supplementary material if any info
+- How was the end of the deduction phase determined?
+- Looking time experiments are all analyzed by age group, why was the switch analysis combined for both age groups (note: results mainly driven by 19mo, no sig. result for 12mo when analyzed separately)? 
 
 Things to do:
 - Cluster based (r-package)
