@@ -11,6 +11,8 @@ library(tidyverse)
 library(CODreports) # custom report functions
 library(afex)
 library(langcog)
+library(magrittr)
+library(ggthemes)
 ```
 
 ```{r data processing}
