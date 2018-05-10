@@ -1,7 +1,7 @@
 ---
 title: "Cesana-Arlotti Permutation Analysis"
 output: html_notebook
-editor_options: 
+editor_options:
   chunk_output_type: inline
 ---
 
@@ -176,6 +176,10 @@ d %>%
 
 This looks reasonable and matches the sample sizes reported in the paper. Now we try to reproduce the timecourse plots and the cluster-based permutation analyses.
 
+```{r store the tidied data, eval = F}
+write_csv(d, path = "../data/ca_tidy_et_data_reanalysis.csv")
+```
+
 ## Goal of permutation analysis
 
 From Cesana-Arlotti et. al.:
@@ -278,17 +282,18 @@ Thus, pupil dilation changes reflected actual differences at each individual tri
   
 ** KM note: I couldn't actually find where they report a single p-value for the permutatation test.**
 
-
  Let's just start with one age group (12 months) and one DV (pupil dilation) to build the cluster-based permuation analysis.
   
 ```{r}
 d_filt <- ss %>% filter(age_group == 12, measurement_type == "PD")
+
 num_sub <- d_filt %>% 
   ungroup() %>% 
   select(Participant, trial_type) %>% 
   unique() %>% 
   count(trial_type) %>% 
-  pull(n) %>% max()
+  pull(n) %>% 
+  max()
 ```
 
 Define t-thresholds. This is important for filtering to keep just the "significant" time bins later in the analysis. 
