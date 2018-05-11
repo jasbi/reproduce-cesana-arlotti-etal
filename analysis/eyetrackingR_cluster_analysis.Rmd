@@ -1,0 +1,60 @@
+---
+title: "Cesana-Arlotti Permutation Analysis"
+output: html_notebook
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r}
+knitr::opts_chunk$set(warning=F, cache=T, message=F)
+```
+
+```{r}
+library(magrittr); library(tidyverse); library(eyetrackingR)
+theme_set(ggthemes::theme_few())
+```
+
+Here we use the eyetrackingR package to reproduce the cluster analysis in Cesana-Arlotti et al (2018).
+
+The analysis involves the following steps and the functions:
+
+* use make_eyetrackingr_data() to get your raw dataframe from the output of the eye-tracker
+
+* use make_time_sequence_data() to creates time-bins and summarizes proportion-looking within each time-bin
+
+* use make_time_cluster_data() to find adjacent time bins that pass some test-statistic threshold, and assigns these adjacent bins into groups (clusters). Supports t.test, wilcox.test, (g)lm, and (g)lmer. Which one should we use?
+
+* Use analyze_time_clusters() to take a summed statistic for each cluster, and compares it to the "null" distribution of sum statistics obtained by shuffling/resampling the data and extracting the largest cluster from each resample.
+
+```{r example}
+data(word_recognition)
+data <- make_eyetrackingr_data(word_recognition, 
+                               participant_column = "ParticipantName",
+                               trial_column = "Trial",
+                               time_column = "TimeFromTrialOnset",
+                               trackloss_column = "TrackLoss",
+                               aoi_columns = c('Animate','Inanimate'),
+                               treat_non_aoi_looks_as_missing = TRUE )
+
+response_window <- subset_by_window(data, window_start_time = 15500, window_end_time = 21000, 
+                                    rezero = FALSE)
+response_time <- make_time_sequence_data(response_window, time_bin_size = 500, aois = "Animate", 
+                                         predictor_columns = "Sex")
+
+time_cluster_data <- make_time_cluster_data(data = response_time, predictor_column = "SexM", 
+                         aoi = "Animate", test = "lmer", 
+                         threshold = 1.5, 
+                         formula = LogitAdjusted ~ Sex + (1|Trial) + (1|ParticipantName))
+summary(time_cluster_data)
+plot(time_cluster_data)
+
+# analyze time clusters in a non-parametric analysis
+## Not run: 
+tc_analysis <- analyze_time_clusters(time_cluster_data, within_subj = FALSE,
+                                     samples = 2000)
+plot(tc_analysis)
+summary(tc_analysis)
+
+## End(Not run)
+```
+
