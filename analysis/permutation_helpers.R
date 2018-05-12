@@ -36,13 +36,27 @@ t_test_by_bin <- function(df, alternative = "two.sided", bin_cut) {
 # returns a data frame with the t-stats for each time bin
  
 
-extract_t <- function(df, t_threshold) {
-  # get t-stats for each model
-  df %>% 
-    mutate(glance = map(model, broom::glance)) %>% 
-    unnest(glance, .drop = TRUE) %>% 
-    select(Bin, statistic, p.value) %>% 
-    filter(statistic >= t_threshold)
+extract_t <- function(df, t_threshold, alternative = "two.sided") {
+  if (alternative == "two.sided") {
+    df %>% 
+      mutate(glance = map(model, broom::glance)) %>% 
+      unnest(glance, .drop = TRUE) %>% 
+      select(Bin, statistic, p.value) %>% 
+      filter(statistic >= t_threshold || statistic <= t_threshold)  
+  } else if (alternative == "lesser") {
+    df %>% 
+      mutate(glance = map(model, broom::glance)) %>% 
+      unnest(glance, .drop = TRUE) %>% 
+      select(Bin, statistic, p.value) %>% 
+      filter(statistic <= t_threshold)
+  } else {
+    df %>% 
+      mutate(glance = map(model, broom::glance)) %>% 
+      unnest(glance, .drop = TRUE) %>% 
+      select(Bin, statistic, p.value) %>% 
+      filter(statistic >= t_threshold)
+  }
+  
 }
 
 ## Sum the T-stats

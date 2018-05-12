@@ -71,6 +71,7 @@ data_points %<>% mutate(diff_n = abs(n_after_join - n),
                         diff_n_after_join = n == n_after_join) 
 data_points
 ```
+
 Ugh, the join is still generating extra data points for each participant and it doesn't look systematic. TODO: some more digging on why the join isn't working like I expect it should.
 
 For now, I'm just going to use `bind_cols()` and see what the data looks like. This is riskier than the join approach because `bind_cols()` joins by position, so we are relying on the structure of the data files being identical. 
